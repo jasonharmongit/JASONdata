@@ -345,27 +345,6 @@ export default function Analysis() {
     };
   };
 
-  // Prepare missing values chart data
-  const prepareMissingValuesChartData = (missingValues) => {
-    const entriesWithMissing = Object.entries(missingValues)
-      .filter(([, count]) => count > 0)
-      .sort(([, a], [, b]) => b - a);
-    
-    return {
-      labels: entriesWithMissing.map(([column]) => truncateLabel(column)),
-      datasets: [
-        {
-          label: 'Missing Values',
-          data: entriesWithMissing.map(([, count]) => count),
-          backgroundColor: 'rgba(255, 99, 132, 0.6)',
-          borderColor: 'rgba(255, 99, 132, 1)',
-          borderWidth: 1,
-          originalLabels: entriesWithMissing.map(([column]) => column),
-        },
-      ],
-    };
-  };
-
   if (isLoading) {
     return (
       <div className="min-h-screen w-screen max-w-none m-0 p-0 bg-gray-900">
@@ -509,6 +488,7 @@ export default function Analysis() {
                               <div><span className="font-medium text-gray-300">Max:</span> {stats.max.toFixed(2)}</div>
                               <div><span className="font-medium text-gray-300">Mean:</span> {stats.mean.toFixed(2)}</div>
                               <div><span className="font-medium text-gray-300">Std Dev:</span> {stats.std.toFixed(2)}</div>
+                              <div><span className="font-medium text-gray-300">Missing Values:</span> {stats.missing_count || 0}</div>
                             </div>
                             <div className="w-full h-[400px] relative">
                               <Plot 
@@ -533,10 +513,13 @@ export default function Analysis() {
                       {Object.entries(analysisReport.categorical_stats).map(([column, valueCounts]) => (
                         <div key={column} className="border-b border-gray-700 pb-6 last:border-0">
                           <h4 className="text-gray-200 font-medium mb-4">{column}</h4>
+                          <div className="space-y-1 text-sm text-gray-400 mb-4">
+                            <div><span className="font-medium text-gray-300">Missing Values:</span> {analysisReport.missing_counts?.[column] || 0}</div>
+                          </div>
                           <div className="w-full h-[400px] relative">
                             <Bar 
                               options={chartOptions} 
-                              data={prepareCategoricalChartData(column, valueCounts)} 
+                              data={prepareCategoricalChartData(column, analysisReport.categorical_stats[column])} 
                             />
                           </div>
                           <div className="text-gray-400 italic mt-2">
@@ -544,21 +527,6 @@ export default function Analysis() {
                           </div>
                         </div>
                       ))}
-                    </div>
-                  </div>
-                )}
-
-                {Object.keys(analysisReport.missing_values).length > 0 && (
-                  <div className="bg-gray-800 rounded-lg p-6">
-                    <h3 className="text-lg font-medium text-gray-100 mb-4">Missing Values</h3>
-                    <div className="h-64 mb-4">
-                      <Bar 
-                        options={chartOptions} 
-                        data={prepareMissingValuesChartData(analysisReport.missing_values)} 
-                      />
-                    </div>
-                    <div className="text-gray-400 italic">
-                      Only showing columns with missing values
                     </div>
                   </div>
                 )}
