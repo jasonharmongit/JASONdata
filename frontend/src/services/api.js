@@ -9,6 +9,14 @@ export const notebookApi = {
     return response.json();
   },
 
+  getOne: async (id) => {
+    const response = await fetch(`${API_BASE_URL}/notebooks/${id}`);
+    if (!response.ok) {
+      throw new Error("Failed to fetch notebook");
+    }
+    return response.json();
+  },
+
   create: async (notebook) => {
     const response = await fetch(`${API_BASE_URL}/notebooks/`, {
       method: "POST",

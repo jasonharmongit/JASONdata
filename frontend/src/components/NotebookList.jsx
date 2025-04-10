@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import NotebookItem from './NotebookItem';
 import { MagnifyingGlassIcon, PlusIcon } from '@heroicons/react/24/outline';
 import { notebookApi } from '../services/api';
 import DataUploadModal from './DataUploadModal';
 
 export default function NotebookList() {
+  const navigate = useNavigate();
   const [notebooks, setNotebooks] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState('lastModified');
@@ -32,8 +34,7 @@ export default function NotebookList() {
   };
 
   const handleNotebookClick = (notebookId) => {
-    // TODO: Implement navigation to notebook detail page
-    console.log('Navigate to notebook:', notebookId);
+    navigate(`/analysis/${notebookId}`);
   };
 
   const handleCreateNotebook = async (data) => {
@@ -44,6 +45,7 @@ export default function NotebookList() {
         file_path: data.file ? data.file.path : null
       });
       setNotebooks([...notebooks, newNotebook]);
+      navigate(`/analysis/${newNotebook.id}`);
     } catch (err) {
       setError('Failed to create notebook');
       console.error('Error creating notebook:', err);
