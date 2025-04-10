@@ -27,6 +27,7 @@ ChartJS.register(
 // Chart options for bar charts
 const chartOptions = {
   responsive: true,
+  maintainAspectRatio: false,
   plugins: {
     legend: {
       display: false,
@@ -55,8 +56,30 @@ const chartOptions = {
   scales: {
     y: {
       beginAtZero: true,
+      grid: {
+        color: '#374151'
+      },
+      ticks: {
+        color: '#e5e7eb'
+      }
     },
+    x: {
+      grid: {
+        color: '#374151'
+      },
+      ticks: {
+        color: '#e5e7eb'
+      }
+    }
   },
+  layout: {
+    padding: {
+      left: 40,
+      right: 20,
+      top: 10,
+      bottom: 40
+    }
+  }
 };
 
 export default function Analysis() {
@@ -304,7 +327,8 @@ export default function Analysis() {
   const prepareCategoricalChartData = (column, valueCounts) => {
     // Convert the object to array and sort by count
     const sortedEntries = Object.entries(valueCounts)
-      .sort(([, a], [, b]) => b - a);
+      .sort(([, a], [, b]) => b - a)
+      .slice(0, 10); // Limit to top 10 categories
     
     return {
       labels: sortedEntries.map(([value]) => truncateLabel(value)),
@@ -313,7 +337,7 @@ export default function Analysis() {
           label: column,
           data: sortedEntries.map(([, count]) => count),
           backgroundColor: 'rgba(75, 192, 192, 0.6)',
-          borderColor: 'rgba(75, 192, 192, 1)',
+          borderColor: 'rgb(75, 192, 192)',
           borderWidth: 1,
           originalLabels: sortedEntries.map(([value]) => value),
         },
@@ -509,17 +533,15 @@ export default function Analysis() {
                       {Object.entries(analysisReport.categorical_stats).map(([column, valueCounts]) => (
                         <div key={column} className="border-b border-gray-700 pb-6 last:border-0">
                           <h4 className="text-gray-200 font-medium mb-4">{column}</h4>
-                          <div className="h-64">
+                          <div className="w-full h-[400px] relative">
                             <Bar 
                               options={chartOptions} 
                               data={prepareCategoricalChartData(column, valueCounts)} 
                             />
                           </div>
-                          {Object.keys(valueCounts).length > 10 && (
-                            <div className="text-gray-400 italic mt-2">
-                              Showing top 10 of {Object.keys(valueCounts).length} values
-                            </div>
-                          )}
+                          <div className="text-gray-400 italic mt-2">
+                            Showing top 10 of {Object.keys(valueCounts).length} categories
+                          </div>
                         </div>
                       ))}
                     </div>
