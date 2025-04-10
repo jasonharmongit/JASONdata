@@ -488,7 +488,7 @@ export default function Analysis() {
                               <div><span className="font-medium text-gray-300">Max:</span> {stats.max.toFixed(2)}</div>
                               <div><span className="font-medium text-gray-300">Mean:</span> {stats.mean.toFixed(2)}</div>
                               <div><span className="font-medium text-gray-300">Std Dev:</span> {stats.std.toFixed(2)}</div>
-                              <div><span className="font-medium text-gray-300">Missing Values:</span> {stats.missing_count || 0}</div>
+                              <div><span className="font-medium text-gray-300">Missing Values:</span> {analysisReport.missing_values[column] || 0}</div>
                             </div>
                             <div className="w-full h-[400px] relative">
                               <Plot 
@@ -514,7 +514,7 @@ export default function Analysis() {
                         <div key={column} className="border-b border-gray-700 pb-6 last:border-0">
                           <h4 className="text-gray-200 font-medium mb-4">{column}</h4>
                           <div className="space-y-1 text-sm text-gray-400 mb-4">
-                            <div><span className="font-medium text-gray-300">Missing Values:</span> {analysisReport.missing_counts?.[column] || 0}</div>
+                            <div><span className="font-medium text-gray-300">Missing Values:</span> {analysisReport.missing_values[column] || 0}</div>
                           </div>
                           <div className="w-full h-[400px] relative">
                             <Bar 

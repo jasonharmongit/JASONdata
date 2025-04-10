@@ -15,7 +15,7 @@ import numpy as np
 import sys, json
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 models.Base.metadata.create_all(bind=engine)
@@ -472,8 +472,7 @@ async def generate_analysis_report(notebook_id: int, db: Session = Depends(get_d
             "missing_values": {},
             "total_rows": len(df),
             "total_columns": len(df.columns),
-            "numeric_distributions": {},
-            "missing_counts": {}
+            "numeric_distributions": {}
         }
         
         logger.info("Starting numeric column detection and conversion")
@@ -586,9 +585,7 @@ async def generate_analysis_report(notebook_id: int, db: Session = Depends(get_d
                 value_counts_dict = {str(k): int(v) for k, v in value_counts.items()}
                 report["categorical_stats"][column] = value_counts_dict
                 # Add missing count to a separate section
-                if "missing_counts" not in report:
-                    report["missing_counts"] = {}
-                report["missing_counts"][column] = missing_count
+                report["missing_values"][column] = missing_count
                 logger.debug(f"Stored {len(value_counts_dict)} categories for column '{column}' (total unique: {unique_count})")
         
         # Log the size of the report before returning
