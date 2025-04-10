@@ -465,6 +465,26 @@ async def generate_analysis_report(notebook_id: int, db: Session = Depends(get_d
             "total_columns": len(df.columns)
         }
         
+        # Attempt to convert columns to numeric where possible
+        for column in df.columns:
+            # Skip if already numeric
+            if pd.api.types.is_numeric_dtype(df[column]):
+                continue
+                
+            # Try to convert to numeric, keeping non-numeric values as NaN
+            try:
+                # First try direct conversion
+                numeric_series = pd.to_numeric(df[column], errors='coerce')
+                
+                # Check if conversion was successful (not all NaN)
+                if not numeric_series.isna().all():
+                    # If at least 80% of the values are numeric, consider it a numeric column
+                    if numeric_series.notna().sum() / len(numeric_series) >= 0.8:
+                        df[column] = numeric_series
+                        logger.info(f"Converted column '{column}' to numeric type")
+            except Exception as e:
+                logger.debug(f"Could not convert column '{column}' to numeric: {str(e)}")
+        
         # Analyze each column
         for column in df.columns:
             # Count missing values

@@ -12,8 +12,9 @@ import {
   Legend,
 } from 'chart.js';
 import { Bar } from 'react-chartjs-2';
+import Plot from 'react-plotly.js';
 
-// Register ChartJS components
+// Register ChartJS components for bar charts
 ChartJS.register(
   CategoryScale,
   LinearScale,
@@ -23,7 +24,7 @@ ChartJS.register(
   Legend
 );
 
-// Chart options
+// Chart options for bar charts
 const chartOptions = {
   responsive: true,
   plugins: {
@@ -36,15 +37,12 @@ const chartOptions = {
     tooltip: {
       callbacks: {
         label: function(context) {
-          // Get the original label from the dataset
           const label = context.dataset.label || '';
           const value = context.raw;
           return `${label}: ${value}`;
         },
         title: function(context) {
-          // For categorical charts, show the full value in the tooltip
           if (context[0].dataset.data.length > 0) {
-            // This is a categorical chart
             const index = context[0].dataIndex;
             const originalValue = context[0].dataset.originalLabels?.[index] || context[0].label;
             return originalValue;
@@ -116,35 +114,63 @@ export default function Analysis() {
     return label;
   };
 
-  // Prepare numeric stats chart data
-  const prepareNumericChartData = (column, stats) => {
+  // Prepare numeric stats for Plotly box plot
+  const prepareNumericPlotData = (column, stats) => {
+    const min = stats.min;
+    const max = stats.max;
+    const mean = stats.mean;
+    const std = stats.std;
+    
+    // Approximate quartiles assuming normal distribution
+    const q1 = mean - 0.675 * std;
+    const q3 = mean + 0.675 * std;
+    const median = mean;
+
     return {
-      labels: ['Min', 'Max', 'Mean', 'Std Dev'],
-      datasets: [
-        {
-          label: column,
-          data: [stats.min, stats.max, stats.mean, stats.std],
-          backgroundColor: [
-            'rgba(75, 192, 192, 0.6)',
-            'rgba(54, 162, 235, 0.6)',
-            'rgba(153, 102, 255, 0.6)',
-            'rgba(255, 159, 64, 0.6)',
-          ],
-          borderColor: [
-            'rgba(75, 192, 192, 1)',
-            'rgba(54, 162, 235, 1)',
-            'rgba(153, 102, 255, 1)',
-            'rgba(255, 159, 64, 1)',
-          ],
-          borderWidth: 1,
+      data: [{
+        type: 'box',
+        name: column,
+        y: [min, q1, median, q3, max],
+        boxpoints: false,
+        marker: {
+          color: 'rgb(75, 192, 192)'
         },
-      ],
+        line: {
+          color: 'rgb(75, 192, 192)'
+        }
+      }],
+      layout: {
+        title: '',
+        paper_bgcolor: 'rgba(0,0,0,0)',
+        plot_bgcolor: 'rgba(0,0,0,0)',
+        font: {
+          color: '#e5e7eb'
+        },
+        margin: {
+          l: 50,
+          r: 20,
+          t: 20,
+          b: 50
+        },
+        showlegend: false,
+        yaxis: {
+          gridcolor: '#374151',
+          zerolinecolor: '#374151'
+        },
+        xaxis: {
+          showgrid: false,
+          zeroline: false
+        }
+      },
+      config: {
+        displayModeBar: false,
+        responsive: true
+      }
     };
   };
 
   // Prepare categorical stats chart data
   const prepareCategoricalChartData = (column, valueCounts) => {
-    // Sort by count and take top 10
     const sortedEntries = Object.entries(valueCounts)
       .sort(([, a], [, b]) => b - a)
       .slice(0, 10);
@@ -166,7 +192,6 @@ export default function Analysis() {
 
   // Prepare missing values chart data
   const prepareMissingValuesChartData = (missingValues) => {
-    // Filter to only include columns with missing values
     const entriesWithMissing = Object.entries(missingValues)
       .filter(([, count]) => count > 0)
       .sort(([, a], [, b]) => b - a);
@@ -319,17 +344,36 @@ export default function Analysis() {
                   <div className="bg-gray-800 rounded-lg p-6">
                     <h3 className="text-lg font-medium text-gray-100 mb-4">Numeric Statistics</h3>
                     <div className="space-y-8">
-                      {Object.entries(analysisReport.numeric_stats).map(([column, stats]) => (
-                        <div key={column} className="border-b border-gray-700 pb-6 last:border-0">
-                          <h4 className="text-gray-200 font-medium mb-4">{column}</h4>
-                          <div className="h-64">
-                            <Bar 
-                              options={chartOptions} 
-                              data={prepareNumericChartData(column, stats)} 
-                            />
+                      {Object.entries(analysisReport.numeric_stats).map(([column, stats]) => {
+                        const plotData = prepareNumericPlotData(column, stats);
+                        return (
+                          <div key={column} className="border-b border-gray-700 pb-6 last:border-0">
+                            <h4 className="text-gray-200 font-medium mb-4">{column}</h4>
+                            <div className="h-64">
+                              <Plot 
+                                data={plotData.data}
+                                layout={plotData.layout}
+                                config={plotData.config}
+                                style={{ width: '100%', height: '100%' }}
+                              />
+                            </div>
+                            <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-4 text-gray-300 text-sm">
+                              <div>
+                                <span className="font-medium">Min:</span> {stats.min.toFixed(2)}
+                              </div>
+                              <div>
+                                <span className="font-medium">Max:</span> {stats.max.toFixed(2)}
+                              </div>
+                              <div>
+                                <span className="font-medium">Mean:</span> {stats.mean.toFixed(2)}
+                              </div>
+                              <div>
+                                <span className="font-medium">Std Dev:</span> {stats.std.toFixed(2)}
+                              </div>
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 )}
