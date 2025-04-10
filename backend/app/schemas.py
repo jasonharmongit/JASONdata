@@ -58,4 +58,14 @@ class DataResponse(BaseModel):
     table_name: str
 
     class Config:
+        from_attributes = True
+
+class AnalysisReport(BaseModel):
+    numeric_stats: Dict[str, Dict[str, float]]  # min, max, mean, std for numeric columns
+    categorical_stats: Dict[str, Dict[str, int]]  # value counts for categorical columns
+    missing_values: Dict[str, int]  # count of missing values per column
+    total_rows: int
+    total_columns: int
+
+    class Config:
         from_attributes = True 

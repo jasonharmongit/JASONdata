@@ -136,4 +136,33 @@ export const notebookApi = {
       throw error;
     }
   },
+
+  getAnalysisReport: async (id) => {
+    console.log(`Generating analysis report for notebook ${id}`);
+
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/notebooks/${id}/analysis-report`
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error("API error response:", {
+          status: response.status,
+          statusText: response.statusText,
+          errorData,
+        });
+        throw new Error(
+          `Failed to generate analysis report: ${response.status} ${response.statusText}`
+        );
+      }
+
+      const data = await response.json();
+      console.log("Analysis report response:", data);
+      return data;
+    } catch (error) {
+      console.error("Error in getAnalysisReport:", error);
+      throw error;
+    }
+  },
 };

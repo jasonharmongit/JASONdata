@@ -438,4 +438,55 @@ async def execute_query(notebook_id: int, query_request: QueryRequest, db: Sessi
         )
     except Exception as e:
         logger.error(f"Error executing query: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Error executing query: {str(e)}") 
+        raise HTTPException(status_code=500, detail=f"Error executing query: {str(e)}")
+
+@app.get("/notebooks/{notebook_id}/analysis-report", response_model=schemas.AnalysisReport)
+async def generate_analysis_report(notebook_id: int, db: Session = Depends(get_db)):
+    """Generate a comprehensive analysis report for a notebook's dataset."""
+    try:
+        # Get the notebook to find the table name
+        notebook = db.query(models.Notebook).filter(models.Notebook.id == notebook_id).first()
+        if not notebook:
+            raise HTTPException(status_code=404, detail="Notebook not found")
+        
+        if not notebook.table_name:
+            raise HTTPException(status_code=400, detail="No dataset associated with this notebook")
+
+        # Read the data using pandas
+        query = f"SELECT * FROM {notebook.table_name}"
+        df = pd.read_sql_query(query, db.get_bind())
+        
+        # Initialize the report structure
+        report = {
+            "numeric_stats": {},
+            "categorical_stats": {},
+            "missing_values": {},
+            "total_rows": len(df),
+            "total_columns": len(df.columns)
+        }
+        
+        # Analyze each column
+        for column in df.columns:
+            # Count missing values
+            report["missing_values"][column] = df[column].isnull().sum()
+            
+            # For numeric columns
+            if pd.api.types.is_numeric_dtype(df[column]):
+                report["numeric_stats"][column] = {
+                    "min": float(df[column].min()),
+                    "max": float(df[column].max()),
+                    "mean": float(df[column].mean()),
+                    "std": float(df[column].std())
+                }
+            
+            # For categorical columns (including object type)
+            if pd.api.types.is_object_dtype(df[column]) or pd.api.types.is_categorical_dtype(df[column]):
+                value_counts = df[column].value_counts().to_dict()
+                # Convert any non-string keys to strings for JSON serialization
+                report["categorical_stats"][column] = {str(k): int(v) for k, v in value_counts.items()}
+        
+        return report
+        
+    except Exception as e:
+        logger.error(f"Error generating analysis report: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e)) 
