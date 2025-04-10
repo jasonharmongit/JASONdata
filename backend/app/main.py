@@ -2,6 +2,7 @@ from fastapi import FastAPI, Depends, HTTPException, Query, UploadFile, File, Fo
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from sqlalchemy import text
+from typing import List, Dict, Optional, Any
 from typing import List, Dict, Optional
 import pandas as pd
 import os
@@ -10,6 +11,8 @@ import re
 from . import models, schemas
 from .database import engine, get_db
 from pydantic import BaseModel
+import numpy as np
+import sys, json
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -444,17 +447,23 @@ async def execute_query(notebook_id: int, query_request: QueryRequest, db: Sessi
 async def generate_analysis_report(notebook_id: int, db: Session = Depends(get_db)):
     """Generate a comprehensive analysis report for a notebook's dataset."""
     try:
+        logger.info(f"Starting analysis report generation for notebook {notebook_id}")
+        
         # Get the notebook to find the table name
         notebook = db.query(models.Notebook).filter(models.Notebook.id == notebook_id).first()
         if not notebook:
+            logger.error(f"Notebook {notebook_id} not found")
             raise HTTPException(status_code=404, detail="Notebook not found")
         
         if not notebook.table_name:
+            logger.error(f"Notebook {notebook_id} has no associated dataset")
             raise HTTPException(status_code=400, detail="No dataset associated with this notebook")
 
+        logger.info(f"Reading data from table {notebook.table_name}")
         # Read the data using pandas
         query = f"SELECT * FROM {notebook.table_name}"
         df = pd.read_sql_query(query, db.get_bind())
+        logger.info(f"Successfully read {len(df)} rows and {len(df.columns)} columns")
         
         # Initialize the report structure
         report = {
@@ -462,51 +471,136 @@ async def generate_analysis_report(notebook_id: int, db: Session = Depends(get_d
             "categorical_stats": {},
             "missing_values": {},
             "total_rows": len(df),
-            "total_columns": len(df.columns)
+            "total_columns": len(df.columns),
+            "numeric_distributions": {}
         }
         
-        # Attempt to convert columns to numeric where possible
+        logger.info("Starting numeric column detection and conversion")
+        # First pass: attempt to convert all columns to numeric
+        numeric_columns = {}
         for column in df.columns:
-            # Skip if already numeric
-            if pd.api.types.is_numeric_dtype(df[column]):
-                continue
-                
-            # Try to convert to numeric, keeping non-numeric values as NaN
             try:
-                # First try direct conversion
+                # Skip if already numeric
+                if pd.api.types.is_numeric_dtype(df[column]):
+                    logger.debug(f"Column '{column}' is already numeric")
+                    numeric_columns[column] = df[column]
+                    continue
+                
+                logger.debug(f"Attempting to convert column '{column}' to numeric")
+                # Try to convert to numeric, keeping non-numeric values as NaN
                 numeric_series = pd.to_numeric(df[column], errors='coerce')
                 
-                # Check if conversion was successful (not all NaN)
-                if not numeric_series.isna().all():
-                    # If at least 80% of the values are numeric, consider it a numeric column
-                    if numeric_series.notna().sum() / len(numeric_series) >= 0.8:
-                        df[column] = numeric_series
-                        logger.info(f"Converted column '{column}' to numeric type")
+                # Only consider it numeric if we have a reasonable conversion rate
+                # (at least 70% of non-null values converted successfully)
+                non_null_count = df[column].notna().sum()
+                if non_null_count > 0:
+                    success_rate = numeric_series.notna().sum() / non_null_count
+                    if success_rate >= 0.7:
+                        numeric_columns[column] = numeric_series
+                        logger.info(f"Successfully converted column '{column}' to numeric with {success_rate:.1%} success rate")
+                    else:
+                        logger.debug(f"Column '{column}' conversion rate {success_rate:.1%} below threshold, treating as categorical")
             except Exception as e:
                 logger.debug(f"Could not convert column '{column}' to numeric: {str(e)}")
         
-        # Analyze each column
-        for column in df.columns:
-            # Count missing values
-            report["missing_values"][column] = df[column].isnull().sum()
-            
-            # For numeric columns
-            if pd.api.types.is_numeric_dtype(df[column]):
-                report["numeric_stats"][column] = {
-                    "min": float(df[column].min()),
-                    "max": float(df[column].max()),
-                    "mean": float(df[column].mean()),
-                    "std": float(df[column].std())
-                }
-            
-            # For categorical columns (including object type)
-            if pd.api.types.is_object_dtype(df[column]) or pd.api.types.is_categorical_dtype(df[column]):
-                value_counts = df[column].value_counts().to_dict()
-                # Convert any non-string keys to strings for JSON serialization
-                report["categorical_stats"][column] = {str(k): int(v) for k, v in value_counts.items()}
+        logger.info(f"Found {len(numeric_columns)} numeric columns out of {len(df.columns)} total columns")
         
+        # Analyze each column
+        logger.info("Starting column analysis")
+        for column in df.columns:
+            logger.debug(f"Analyzing column: {column}")
+            
+            # Count missing values
+            missing_count = int(df[column].isnull().sum())
+            report["missing_values"][column] = missing_count
+            logger.debug(f"Column '{column}' has {missing_count} missing values")
+            
+            # If column was successfully converted to numeric
+            if column in numeric_columns:
+                logger.debug(f"Processing numeric column: {column}")
+                clean_series = numeric_columns[column].dropna()
+                if len(clean_series) > 0:  # Only process if we have data points
+                    logger.debug(f"Calculating distribution for column '{column}' with {len(clean_series)} valid points")
+                    try:
+                        # Calculate histogram bins with a maximum number of bins
+                        MAX_HISTOGRAM_BINS = 50
+                        hist_values, hist_bins = np.histogram(clean_series, bins=min(MAX_HISTOGRAM_BINS, int(np.sqrt(len(clean_series)))))
+                        logger.debug(f"Generated histogram with {len(hist_bins)-1} bins")
+                        
+                        # Convert numpy types to Python native types for JSON serialization
+                        hist_values = hist_values.tolist()
+                        hist_bins = hist_bins.tolist()
+                        
+                        # Calculate boxplot statistics
+                        q1 = float(clean_series.quantile(0.25))
+                        q2 = float(clean_series.median())
+                        q3 = float(clean_series.quantile(0.75))
+                        iqr = q3 - q1
+                        whisker_min = float(clean_series[clean_series >= q1 - 1.5 * iqr].min())
+                        whisker_max = float(clean_series[clean_series <= q3 + 1.5 * iqr].max())
+                        
+                        # Store distribution data
+                        report["numeric_distributions"][column] = {
+                            "histogram": {
+                                "counts": hist_values,
+                                "bin_edges": hist_bins,
+                            },
+                            "boxplot": {
+                                "whisker_min": whisker_min,
+                                "q1": q1,
+                                "median": q2,
+                                "q3": q3,
+                                "whisker_max": whisker_max,
+                            }
+                        }
+                        
+                        # Store basic statistics
+                        report["numeric_stats"][column] = {
+                            "min": float(clean_series.min()),
+                            "max": float(clean_series.max()),
+                            "mean": float(clean_series.mean()),
+                            "std": float(clean_series.std())
+                        }
+                        logger.debug(f"Successfully calculated all statistics for column '{column}'")
+                    except Exception as e:
+                        logger.error(f"Error calculating statistics for column '{column}': {str(e)}")
+                        raise
+                else:
+                    logger.warning(f"Column '{column}' has no valid numeric data after cleaning")
+            
+            # For non-numeric columns (or failed conversions), treat as categorical
+            if column not in numeric_columns:
+                logger.debug(f"Processing categorical column: {column}")
+                value_counts = df[column].value_counts()
+                unique_count = len(value_counts)
+                
+                # If we have too many unique values, only take the top N
+                MAX_CATEGORICAL_VALUES = 50
+                if unique_count > MAX_CATEGORICAL_VALUES:
+                    logger.info(f"Column '{column}' has {unique_count} unique values, limiting to top {MAX_CATEGORICAL_VALUES}")
+                    value_counts = value_counts.head(MAX_CATEGORICAL_VALUES)
+                
+                # Convert to dictionary and ensure all keys are strings
+                value_counts_dict = {str(k): int(v) for k, v in value_counts.items()}
+                report["categorical_stats"][column] = value_counts_dict
+                logger.debug(f"Stored {len(value_counts_dict)} categories for column '{column}' (total unique: {unique_count})")
+        
+        # Log the size of the report before returning
+        report_json = json.dumps(report)
+        report_size_mb = sys.getsizeof(report_json) / (1024 * 1024)
+        logger.info(f"Final report size: {report_size_mb:.2f} MB")
+        
+        if report_size_mb > 10:  # Warning if report is larger than 10MB
+            logger.warning(f"Large report size ({report_size_mb:.2f} MB). Consider further data reduction.")
+            # Log sizes of each component
+            for key, value in report.items():
+                component_json = json.dumps(value)
+                component_size_mb = sys.getsizeof(component_json) / (1024 * 1024)
+                logger.warning(f"Component '{key}' size: {component_size_mb:.2f} MB")
+        
+        logger.info("Analysis report generation completed successfully")
         return report
         
     except Exception as e:
-        logger.error(f"Error generating analysis report: {str(e)}")
+        logger.error(f"Error generating analysis report: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e)) 

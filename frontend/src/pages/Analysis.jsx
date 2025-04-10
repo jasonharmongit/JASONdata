@@ -96,15 +96,86 @@ export default function Analysis() {
     try {
       setIsGeneratingReport(true);
       setError(null);
+      console.log('Starting report generation for notebook:', notebookId);
+
       const report = await notebookApi.getAnalysisReport(notebookId);
+      console.log('Received analysis report:', report);
+
+      // Validate the report structure
+      if (!report) {
+        throw new Error('Received empty report from server');
+      }
+
+      // Check required top-level properties
+      const requiredProperties = ['numeric_stats', 'categorical_stats', 'missing_values', 'total_rows', 'total_columns', 'numeric_distributions'];
+      const missingProperties = requiredProperties.filter(prop => !(prop in report));
+      
+      if (missingProperties.length > 0) {
+        throw new Error(`Report is missing required properties: ${missingProperties.join(', ')}`);
+      }
+
+      // Validate numeric distributions if we have numeric stats
+      if (Object.keys(report.numeric_stats).length > 0) {
+        Object.entries(report.numeric_stats).forEach(([column, stats]) => {
+          if (!report.numeric_distributions[column]) {
+            console.warn(`Column ${column} has numeric stats but no distribution data`);
+          }
+          
+          const distribution = report.numeric_distributions[column];
+          if (distribution) {
+            // Validate histogram data
+            if (!distribution.histogram?.counts || !distribution.histogram?.bin_edges) {
+              console.warn(`Column ${column} is missing histogram data`);
+            }
+            // Validate boxplot data
+            if (!distribution.boxplot?.whisker_min || !distribution.boxplot?.q1 || 
+                !distribution.boxplot?.median || !distribution.boxplot?.q3 || 
+                !distribution.boxplot?.whisker_max) {
+              console.warn(`Column ${column} is missing boxplot data`);
+            }
+          }
+        });
+      }
+
+      console.log('Report validation passed. Setting analysis report state.');
       setAnalysisReport(report);
+      console.log('Analysis report state updated.');
+
     } catch (err) {
-      setError('Failed to generate analysis report');
-      console.error('Error generating report:', err);
+      console.error('Error in handleGenerateReport:', err);
+      let errorMessage = 'Failed to generate analysis report';
+      
+      // Add more context to the error message
+      if (err.message) {
+        errorMessage += `: ${err.message}`;
+      }
+      
+      // If it's a network error, add more details
+      if (err.response) {
+        console.error('Server response:', err.response);
+        errorMessage += ` (Status: ${err.response.status})`;
+        if (err.response.data?.detail) {
+          errorMessage += ` - ${err.response.data.detail}`;
+        }
+      }
+      
+      setError(errorMessage);
     } finally {
       setIsGeneratingReport(false);
+      console.log('Report generation completed');
     }
   };
+
+  // Add a debug effect to log state changes
+  useEffect(() => {
+    if (analysisReport) {
+      console.log('Analysis report state updated:', {
+        numericColumns: Object.keys(analysisReport.numeric_stats).length,
+        categoricalColumns: Object.keys(analysisReport.categorical_stats).length,
+        distributions: Object.keys(analysisReport.numeric_distributions).length
+      });
+    }
+  }, [analysisReport]);
 
   // Helper function to truncate labels
   const truncateLabel = (label) => {
@@ -116,64 +187,101 @@ export default function Analysis() {
 
   // Prepare numeric stats for Plotly box plot
   const prepareNumericPlotData = (column, stats) => {
-    const min = stats.min;
-    const max = stats.max;
-    const mean = stats.mean;
-    const std = stats.std;
-    
-    // Approximate quartiles assuming normal distribution
-    const q1 = mean - 0.675 * std;
-    const q3 = mean + 0.675 * std;
-    const median = mean;
+    const distributions = analysisReport.numeric_distributions[column];
+    const boxplot = distributions.boxplot;
+    const histogram = distributions.histogram;
 
     return {
-      data: [{
-        type: 'box',
-        name: column,
-        y: [min, q1, median, q3, max],
-        boxpoints: false,
-        marker: {
-          color: 'rgb(75, 192, 192)'
+      data: [
+        {
+          type: 'box',
+          x: [boxplot.whisker_min, boxplot.q1, boxplot.median, boxplot.q3, boxplot.whisker_max],
+          name: column,
+          orientation: 'h',
+          boxpoints: false,
+          marker: { color: 'rgb(75, 192, 192)' },
+          line: { 
+            color: 'rgb(75, 192, 192)',
+            width: 2
+          },
+          fillcolor: 'rgba(75, 192, 192, 0.8)',
+          hoverinfo: 'x',
+          showlegend: false,
+          xaxis: 'x',
+          yaxis: 'y1'
         },
-        line: {
-          color: 'rgb(75, 192, 192)'
+        {
+          type: 'bar',
+          x: histogram.bin_edges.slice(0, -1),
+          y: histogram.counts,
+          name: 'Distribution',
+          marker: { color: 'rgba(75, 192, 192, 0.6)' },
+          width: histogram.bin_edges.map((edge, i) => 
+            i < histogram.bin_edges.length - 1 ? histogram.bin_edges[i + 1] - edge : 0
+          ),
+          showlegend: false,
+          xaxis: 'x',
+          yaxis: 'y2'
         }
-      }],
+      ],
       layout: {
         title: '',
         paper_bgcolor: 'rgba(0,0,0,0)',
         plot_bgcolor: 'rgba(0,0,0,0)',
-        font: {
-          color: '#e5e7eb'
-        },
-        margin: {
-          l: 50,
-          r: 20,
-          t: 20,
-          b: 50
-        },
-        showlegend: false,
-        yaxis: {
-          gridcolor: '#374151',
-          zerolinecolor: '#374151'
+        font: { color: '#e5e7eb' },
+        margin: { l: 40, r: 10, t: 10, b: 40 },
+        height: 400,
+        autosize: true,
+        grid: {
+          rows: 2,
+          columns: 1,
+          pattern: 'independent',
+          roworder: 'top to bottom'
         },
         xaxis: {
-          showgrid: false,
-          zeroline: false
+          title: {
+            text: column,
+            standoff: 10
+          },
+          gridcolor: '#374151',
+          zerolinecolor: '#374151',
+          range: [
+            boxplot.whisker_min - (boxplot.whisker_max - boxplot.whisker_min) * 0.05,
+            boxplot.whisker_max + (boxplot.whisker_max - boxplot.whisker_min) * 0.05
+          ]
+        },
+        yaxis1: {  // Boxplot y-axis
+          gridcolor: '#374151',
+          zerolinecolor: '#374151',
+          showticklabels: false,
+          domain: [0.75, 0.9],  // Adjusted for better spacing
+          fixedrange: true
+        },
+        yaxis2: {  // Histogram y-axis
+          gridcolor: '#374151',
+          zerolinecolor: '#374151',
+          showticklabels: true,
+          title: {
+            text: 'Count',
+            standoff: 10
+          },
+          domain: [0.2, 0.65],  // Adjusted for better spacing
+          fixedrange: true
         }
       },
       config: {
         displayModeBar: false,
-        responsive: true
+        responsive: true,
+        staticPlot: true
       }
     };
   };
 
   // Prepare categorical stats chart data
   const prepareCategoricalChartData = (column, valueCounts) => {
+    // Convert the object to array and sort by count
     const sortedEntries = Object.entries(valueCounts)
-      .sort(([, a], [, b]) => b - a)
-      .slice(0, 10);
+      .sort(([, a], [, b]) => b - a);
     
     return {
       labels: sortedEntries.map(([value]) => truncateLabel(value)),
@@ -348,28 +456,21 @@ export default function Analysis() {
                         const plotData = prepareNumericPlotData(column, stats);
                         return (
                           <div key={column} className="border-b border-gray-700 pb-6 last:border-0">
-                            <h4 className="text-gray-200 font-medium mb-4">{column}</h4>
-                            <div className="h-64">
+                            <h4 className="text-gray-200 font-medium mb-2">{column}</h4>
+                            <div className="space-y-1 text-sm text-gray-400 mb-4">
+                              <div><span className="font-medium text-gray-300">Min:</span> {stats.min.toFixed(2)}</div>
+                              <div><span className="font-medium text-gray-300">Max:</span> {stats.max.toFixed(2)}</div>
+                              <div><span className="font-medium text-gray-300">Mean:</span> {stats.mean.toFixed(2)}</div>
+                              <div><span className="font-medium text-gray-300">Std Dev:</span> {stats.std.toFixed(2)}</div>
+                            </div>
+                            <div className="w-full h-[400px] relative">
                               <Plot 
                                 data={plotData.data}
                                 layout={plotData.layout}
                                 config={plotData.config}
                                 style={{ width: '100%', height: '100%' }}
+                                useResizeHandler={true}
                               />
-                            </div>
-                            <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-4 text-gray-300 text-sm">
-                              <div>
-                                <span className="font-medium">Min:</span> {stats.min.toFixed(2)}
-                              </div>
-                              <div>
-                                <span className="font-medium">Max:</span> {stats.max.toFixed(2)}
-                              </div>
-                              <div>
-                                <span className="font-medium">Mean:</span> {stats.mean.toFixed(2)}
-                              </div>
-                              <div>
-                                <span className="font-medium">Std Dev:</span> {stats.std.toFixed(2)}
-                              </div>
                             </div>
                           </div>
                         );

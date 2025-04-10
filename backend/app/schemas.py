@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 from datetime import datetime
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Union
 
 class NotebookBase(BaseModel):
     title: str
@@ -66,6 +66,7 @@ class AnalysisReport(BaseModel):
     missing_values: Dict[str, int]  # count of missing values per column
     total_rows: int
     total_columns: int
+    numeric_distributions: Dict[str, Dict[str, Dict[str, Union[List[float], float]]]]  # histogram and boxplot data
 
     class Config:
         from_attributes = True 
