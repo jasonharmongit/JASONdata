@@ -5,6 +5,7 @@ from typing import Optional, Dict, Any
 class NotebookBase(BaseModel):
     title: str
     description: Optional[str] = None
+    file_path: Optional[str] = None
 
 class NotebookCreate(NotebookBase):
     pass

@@ -1,24 +1,64 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import NotebookItem from './NotebookItem';
 import { MagnifyingGlassIcon, PlusIcon } from '@heroicons/react/24/outline';
+import { notebookApi } from '../services/api';
+import DataUploadModal from './DataUploadModal';
 
 export default function NotebookList() {
-  const [notebooks, setNotebooks] = useState([
-    { id: 1, title: 'My First Notebook', lastModified: '2024-04-09' },
-    { id: 2, title: 'Project Notes', lastModified: '2024-04-08' },
-  ]);
+  const [notebooks, setNotebooks] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState('lastModified');
   const [sortOrder, setSortOrder] = useState('desc');
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
+  useEffect(() => {
+    fetchNotebooks();
+  }, []);
+
+  const fetchNotebooks = async () => {
+    try {
+      setIsLoading(true);
+      const data = await notebookApi.getAll();
+      setNotebooks(data);
+      setError(null);
+    } catch (err) {
+      setError('Failed to load notebooks');
+      console.error('Error fetching notebooks:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleNotebookClick = (notebookId) => {
     // TODO: Implement navigation to notebook detail page
     console.log('Navigate to notebook:', notebookId);
   };
 
-  const handleCreateNotebook = () => {
-    // TODO: Implement create notebook functionality
-    console.log('Create new notebook');
+  const handleCreateNotebook = async (data) => {
+    try {
+      const newNotebook = await notebookApi.create({
+        title: data.title,
+        description: data.description,
+        file_path: data.file ? data.file.path : null
+      });
+      setNotebooks([...notebooks, newNotebook]);
+    } catch (err) {
+      setError('Failed to create notebook');
+      console.error('Error creating notebook:', err);
+      throw err;
+    }
+  };
+
+  const handleDeleteNotebook = async (notebookId) => {
+    try {
+      await notebookApi.delete(notebookId);
+      setNotebooks(notebooks.filter(nb => nb.id !== notebookId));
+    } catch (err) {
+      setError('Failed to delete notebook');
+      console.error('Error deleting notebook:', err);
+    }
   };
 
   const filteredAndSortedNotebooks = notebooks
@@ -31,11 +71,37 @@ export default function NotebookList() {
           ? a.title.localeCompare(b.title)
           : b.title.localeCompare(a.title);
       }
-      // Default sort by lastModified
+      // Default sort by updated_at
       return sortOrder === 'asc'
-        ? new Date(a.lastModified) - new Date(b.lastModified)
-        : new Date(b.lastModified) - new Date(a.lastModified);
+        ? new Date(a.updated_at || a.created_at) - new Date(b.updated_at || b.created_at)
+        : new Date(b.updated_at || b.created_at) - new Date(a.updated_at || a.created_at);
     });
+
+  if (isLoading) {
+    return (
+      <div className="container mx-auto px-4 py-6">
+        <div className="text-center py-12">
+          <p className="text-gray-400 text-lg">Loading notebooks...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="container mx-auto px-4 py-6">
+        <div className="text-center py-12">
+          <p className="text-red-400 text-lg">{error}</p>
+          <button
+            onClick={fetchNotebooks}
+            className="mt-4 bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-lg transition-colors"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto px-4 py-6">
@@ -66,7 +132,7 @@ export default function NotebookList() {
             {sortOrder === 'asc' ? '↑' : '↓'}
           </button>
           <button
-            onClick={handleCreateNotebook}
+            onClick={() => setIsModalOpen(true)}
             className="flex items-center space-x-2 bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-lg transition-colors"
           >
             <PlusIcon className="h-5 w-5" />
@@ -84,7 +150,7 @@ export default function NotebookList() {
           </p>
           {!searchQuery && (
             <button
-              onClick={handleCreateNotebook}
+              onClick={() => setIsModalOpen(true)}
               className="mt-4 inline-flex items-center space-x-2 bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-lg transition-colors"
             >
               <PlusIcon className="h-5 w-5" />
@@ -99,10 +165,17 @@ export default function NotebookList() {
               key={notebook.id}
               notebook={notebook}
               onNotebookClick={handleNotebookClick}
+              onDelete={() => handleDeleteNotebook(notebook.id)}
             />
           ))}
         </div>
       )}
+
+      <DataUploadModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onSubmit={handleCreateNotebook}
+      />
     </div>
   );
 } 

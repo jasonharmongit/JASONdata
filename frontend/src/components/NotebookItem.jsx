@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { EllipsisVerticalIcon } from '@heroicons/react/24/outline';
 
-export default function NotebookItem({ notebook, onNotebookClick }) {
+export default function NotebookItem({ notebook, onNotebookClick, onDelete }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   const handleMenuClick = (e) => {
@@ -11,9 +11,21 @@ export default function NotebookItem({ notebook, onNotebookClick }) {
 
   const handleAction = (e, action) => {
     e.stopPropagation();
-    // TODO: Implement action handlers
-    console.log(`${action} notebook:`, notebook.id);
+    if (action === 'delete') {
+      onDelete();
+    }
     setIsMenuOpen(false);
+  };
+
+  const formatDate = (dateString) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
   };
 
   return (
@@ -23,7 +35,9 @@ export default function NotebookItem({ notebook, onNotebookClick }) {
     >
       <div className="flex-1">
         <h3 className="text-lg font-medium text-gray-100">{notebook.title}</h3>
-        <p className="text-sm text-gray-400">Last modified: {notebook.lastModified}</p>
+        <p className="text-sm text-gray-400">
+          Last modified: {formatDate(notebook.updated_at || notebook.created_at)}
+        </p>
       </div>
       <div className="relative">
         <button
