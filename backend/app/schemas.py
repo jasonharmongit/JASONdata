@@ -1,11 +1,11 @@
 from pydantic import BaseModel
 from datetime import datetime
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 
 class NotebookBase(BaseModel):
     title: str
     description: Optional[str] = None
-    file_path: Optional[str] = None
+    table_name: Optional[str] = None
 
 class NotebookCreate(NotebookBase):
     pass
@@ -27,8 +27,8 @@ class DatasetCreate(DatasetBase):
 
 class Dataset(DatasetBase):
     id: int
-    file_path: str
-    metadata: Dict[str, Any]
+    file_path: Optional[str] = None
+    dataset_metadata: Optional[Dict[str, Any]] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
 
@@ -47,6 +47,14 @@ class Analysis(AnalysisBase):
     result: Dict[str, Any]
     visualization: Optional[Dict[str, Any]] = None
     created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class DataResponse(BaseModel):
+    data: List[Dict[str, Any]]
+    columns: List[str]
+    total: int
 
     class Config:
         from_attributes = True 

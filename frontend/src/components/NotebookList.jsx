@@ -42,7 +42,8 @@ export default function NotebookList() {
       const newNotebook = await notebookApi.create({
         title: data.title,
         description: data.description,
-        file_path: data.file ? data.file.path : null
+        table_name: data.table_name,
+        file: data.file
       });
       setNotebooks([...notebooks, newNotebook]);
       navigate(`/analysis/${newNotebook.id}`);

@@ -8,18 +8,7 @@ class Notebook(Base):
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String, index=True)
     description = Column(String, nullable=True)
-    file_path = Column(String, nullable=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
-
-class Dataset(Base):
-    __tablename__ = "datasets"
-
-    id = Column(Integer, primary_key=True, index=True)
-    notebook_id = Column(Integer, ForeignKey("notebooks.id"))
-    name = Column(String, index=True)
-    file_path = Column(String)
-    dataset_metadata = Column(JSON)
+    table_name = Column(String, nullable=True)  # Name of the table containing the data
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 

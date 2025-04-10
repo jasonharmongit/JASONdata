@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { notebookApi } from '../services/api';
 import { ArrowLeftIcon } from '@heroicons/react/24/outline';
 
@@ -96,18 +96,31 @@ export default function Analysis() {
     <div className="min-h-screen w-screen max-w-none m-0 p-0 bg-gray-900">
       <header className="w-full border-b border-gray-800">
         <div className="container mx-auto py-4">
-          <div className="flex items-center">
-            <button
-              onClick={handleBackClick}
-              className="mr-4 text-gray-400 hover:text-gray-200"
-            >
-              <ArrowLeftIcon className="h-5 w-5" />
-            </button>
-            <h1 className="text-2xl font-medium tracking-tight text-gray-100">
-              <span>JASON</span>
-              <span className="text-teal-400">data</span>
-              <span className="ml-4">|<span className="ml-4">Analysis</span></span>
-            </h1>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center">
+              <button
+                onClick={handleBackClick}
+                className="mr-4 text-gray-400 hover:text-gray-200"
+              >
+                <ArrowLeftIcon className="h-5 w-5" />
+              </button>
+              <h1 className="text-2xl font-medium tracking-tight text-gray-100">
+                <span>JASON</span>
+                <span className="text-teal-400">data</span>
+                <span className="ml-4">|</span>
+                <span className="ml-4">
+                  <Link to={`/analysis/${notebookId}`} className="text-gray-100">Analysis</Link>
+                  <span className="mx-2 text-gray-600">|</span>
+                  <Link 
+                    to="/data" 
+                    state={{ notebookId }} 
+                    className="text-gray-400 hover:text-gray-200"
+                  >
+                    Data
+                  </Link>
+                </span>
+              </h1>
+            </div>
           </div>
         </div>
       </header>

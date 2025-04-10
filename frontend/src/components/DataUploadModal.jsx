@@ -4,6 +4,7 @@ import { XMarkIcon } from '@heroicons/react/24/outline';
 export default function DataUploadModal({ isOpen, onClose, onSubmit }) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  const [tableName, setTableName] = useState('');
   const [file, setFile] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState(null);
@@ -14,6 +15,11 @@ export default function DataUploadModal({ isOpen, onClose, onSubmit }) {
       setError('Please enter a notebook title');
       return;
     }
+    
+    if (!tableName.trim()) {
+      setError('Please enter a table name');
+      return;
+    }
 
     setIsSubmitting(true);
     setError(null);
@@ -22,6 +28,7 @@ export default function DataUploadModal({ isOpen, onClose, onSubmit }) {
       await onSubmit({
         title: title.trim(),
         description: description.trim(),
+        table_name: tableName.trim(),
         file: file
       });
       onClose();
@@ -41,6 +48,10 @@ export default function DataUploadModal({ isOpen, onClose, onSubmit }) {
         const fileName = selectedFile.name;
         const nameWithoutExtension = fileName.substring(0, fileName.lastIndexOf('.'));
         setTitle(nameWithoutExtension);
+        // Also set the table name based on the file name
+        if (!tableName) {
+          setTableName(nameWithoutExtension.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase());
+        }
       }
     }
   };
@@ -74,6 +85,23 @@ export default function DataUploadModal({ isOpen, onClose, onSubmit }) {
                 className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-500"
                 placeholder="Enter notebook title"
               />
+            </div>
+
+            <div>
+              <label htmlFor="tableName" className="block text-sm font-medium text-gray-300 mb-1">
+                Table Name
+              </label>
+              <input
+                type="text"
+                id="tableName"
+                value={tableName}
+                onChange={(e) => setTableName(e.target.value)}
+                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                placeholder="Enter table name (lowercase, underscores only)"
+              />
+              <p className="mt-1 text-xs text-gray-400">
+                Use lowercase letters, numbers, and underscores only. This will be the name of the table in the database.
+              </p>
             </div>
 
             <div>
