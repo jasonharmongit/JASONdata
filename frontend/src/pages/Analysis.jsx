@@ -191,6 +191,12 @@ export default function Analysis() {
     const boxplot = distributions.boxplot;
     const histogram = distributions.histogram;
 
+    // Calculate the plot range with padding
+    const range = [
+      boxplot.whisker_min - (boxplot.whisker_max - boxplot.whisker_min) * 0.05,
+      boxplot.whisker_max + (boxplot.whisker_max - boxplot.whisker_min) * 0.05
+    ];
+
     return {
       data: [
         {
@@ -207,7 +213,7 @@ export default function Analysis() {
           fillcolor: 'rgba(75, 192, 192, 0.8)',
           hoverinfo: 'x',
           showlegend: false,
-          xaxis: 'x',
+          xaxis: 'x1',
           yaxis: 'y1'
         },
         {
@@ -215,12 +221,18 @@ export default function Analysis() {
           x: histogram.bin_edges.slice(0, -1),
           y: histogram.counts,
           name: 'Distribution',
-          marker: { color: 'rgba(75, 192, 192, 0.6)' },
+          marker: { 
+            color: 'rgba(75, 192, 192, 0.6)',
+            line: {
+              color: 'rgb(75, 192, 192)',
+              width: 1
+            }
+          },
           width: histogram.bin_edges.map((edge, i) => 
             i < histogram.bin_edges.length - 1 ? histogram.bin_edges[i + 1] - edge : 0
           ),
           showlegend: false,
-          xaxis: 'x',
+          xaxis: 'x2',
           yaxis: 'y2'
         }
       ],
@@ -229,7 +241,7 @@ export default function Analysis() {
         paper_bgcolor: 'rgba(0,0,0,0)',
         plot_bgcolor: 'rgba(0,0,0,0)',
         font: { color: '#e5e7eb' },
-        margin: { l: 40, r: 10, t: 10, b: 40 },
+        margin: { l: 40, r: 20, t: 10, b: 40 },
         height: 400,
         autosize: true,
         grid: {
@@ -238,23 +250,34 @@ export default function Analysis() {
           pattern: 'independent',
           roworder: 'top to bottom'
         },
-        xaxis: {
+        // Common settings for both x-axes
+        xaxis1: {  // Boxplot x-axis
+          showticklabels: false,
+          showgrid: true,
+          zeroline: true,
+          gridcolor: '#374151',
+          zerolinecolor: '#374151',
+          range: range,
+          domain: [0.1, 0.9]  // Consistent domain for both plots
+        },
+        xaxis2: {  // Histogram x-axis
           title: {
             text: column,
             standoff: 10
           },
+          showticklabels: true,
+          showgrid: true,
+          zeroline: true,
           gridcolor: '#374151',
           zerolinecolor: '#374151',
-          range: [
-            boxplot.whisker_min - (boxplot.whisker_max - boxplot.whisker_min) * 0.05,
-            boxplot.whisker_max + (boxplot.whisker_max - boxplot.whisker_min) * 0.05
-          ]
+          range: range,
+          domain: [0.1, 0.9]  // Consistent domain for both plots
         },
         yaxis1: {  // Boxplot y-axis
-          gridcolor: '#374151',
-          zerolinecolor: '#374151',
+          showgrid: false,
+          zeroline: false,
           showticklabels: false,
-          domain: [0.75, 0.9],  // Adjusted for better spacing
+          domain: [0.75, 0.9],
           fixedrange: true
         },
         yaxis2: {  // Histogram y-axis
@@ -265,7 +288,7 @@ export default function Analysis() {
             text: 'Count',
             standoff: 10
           },
-          domain: [0.2, 0.65],  // Adjusted for better spacing
+          domain: [0.2, 0.65],
           fixedrange: true
         }
       },
