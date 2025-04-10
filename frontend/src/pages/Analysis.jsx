@@ -489,6 +489,16 @@ export default function Analysis() {
                               <div><span className="font-medium text-gray-300">Mean:</span> {stats.mean.toFixed(2)}</div>
                               <div><span className="font-medium text-gray-300">Std Dev:</span> {stats.std.toFixed(2)}</div>
                               <div><span className="font-medium text-gray-300">Missing Values:</span> {analysisReport.missing_values[column] || 0}</div>
+                              {stats.top_values_by_zscore && (
+                                <div className="mt-2">
+                                  <div className="font-medium text-gray-300">Top 5 Values (by z-score):</div>
+                                  <div className="pl-2 text-xs">
+                                    {stats.top_values_by_zscore.map((value, index) => (
+                                      <div key={index}>{value.toFixed(2)}</div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
                             </div>
                             <div className="w-full h-[400px] relative">
                               <Plot 

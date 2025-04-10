@@ -562,6 +562,15 @@ async def generate_analysis_report(notebook_id: int, db: Session = Depends(get_d
                             "std": float(clean_series.std()),
                             "missing_count": missing_count
                         }
+                        
+                        # Calculate z-scores for the top 5 values
+                        if len(clean_series) > 0:
+                            z_scores = np.abs((clean_series - clean_series.mean()) / clean_series.std())
+                            top_indices = z_scores.nlargest(5).index
+                            top_values = clean_series[top_indices].tolist()
+                            report["numeric_stats"][column]["top_values_by_zscore"] = top_values
+                            logger.debug(f"Calculated top 5 values by z-score for column '{column}': {top_values}")
+                        
                         logger.debug(f"Successfully calculated all statistics for column '{column}'")
                     except Exception as e:
                         logger.error(f"Error calculating statistics for column '{column}': {str(e)}")
