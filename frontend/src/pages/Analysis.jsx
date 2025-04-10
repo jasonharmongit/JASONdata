@@ -214,10 +214,10 @@ export default function Analysis() {
     const boxplot = distributions.boxplot;
     const histogram = distributions.histogram;
 
-    // Calculate the plot range with padding
+    // Calculate the plot range with padding using the full data range
     const range = [
-      boxplot.whisker_min - (boxplot.whisker_max - boxplot.whisker_min) * 0.05,
-      boxplot.whisker_max + (boxplot.whisker_max - boxplot.whisker_min) * 0.05
+      stats.min - (stats.max - stats.min) * 0.05,
+      stats.max + (stats.max - stats.min) * 0.05
     ];
 
     return {
