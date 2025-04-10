@@ -31,7 +31,7 @@ const Data = () => {
 
       try {
         setIsLoading(true);
-        const response = await notebookApi.getData(notebookId, { limit: 1000 });
+        const response = await notebookApi.getData(notebookId, { limit: 100 });
         console.log('Data response:', response);
         console.log('Table name from response:', response.table_name);
         
@@ -122,13 +122,14 @@ const Data = () => {
       setIsExecutingQuery(true);
       setQueryError(null);
       
-      // Send the SQL query to the backend for processing
-      const response = await notebookApi.executeQuery(notebookId, query);
+      // Send the SQL query to the backend for processing with a limit of 100 rows
+      const response = await notebookApi.executeQuery(notebookId, query, { limit: 100 });
       setQueryResult(response);
       setIsExecutingQuery(false);
     } catch (err) {
       setQueryError(err.message || 'Failed to execute query');
       setIsExecutingQuery(false);
+      console.error('SQL Error:', err);
     }
   };
 
@@ -275,7 +276,10 @@ const Data = () => {
                     </button>
                   </div>
                   {queryError && (
-                    <p className="mt-2 text-sm text-red-400">{queryError}</p>
+                    <div className="mt-2 p-3 bg-red-900 text-red-200 rounded-md text-sm">
+                      <p className="font-medium">SQL Error:</p>
+                      <p className="font-mono mt-1">{queryError}</p>
+                    </div>
                   )}
                   <div className="mt-2 text-xs text-gray-400">
                     <p>Example queries:</p>

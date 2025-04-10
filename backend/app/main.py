@@ -99,8 +99,10 @@ async def create_notebook(
             # Clean column names to be valid SQL identifiers
             clean_columns = {}
             for col in df.columns:
+                # Convert to lowercase first
+                clean_col = col.lower()
                 # Replace spaces and special characters with underscores
-                clean_col = re.sub(r'[^a-zA-Z0-9]', '_', col)
+                clean_col = re.sub(r'[^a-z0-9]', '_', clean_col)
                 # Ensure it starts with a letter
                 if not clean_col[0].isalpha():
                     clean_col = 'col_' + clean_col
@@ -372,6 +374,8 @@ def create_dataset(notebook_id: int, dataset: schemas.DatasetCreate, db: Session
 
 class QueryRequest(BaseModel):
     query: str
+    limit: Optional[int] = 1000
+    offset: Optional[int] = 0
 
 @app.post("/notebooks/{notebook_id}/execute-query", response_model=schemas.DataResponse)
 async def execute_query(notebook_id: int, query_request: QueryRequest, db: Session = Depends(get_db)):
@@ -400,9 +404,13 @@ async def execute_query(notebook_id: int, query_request: QueryRequest, db: Sessi
         # We'll still execute it, but log a warning
     
     try:
-        # Execute the query
-        logger.info(f"Executing query: {query}")
-        result = db.execute(text(query))
+        # Execute the query with pagination
+        logger.info(f"Executing query: {query} with limit={query_request.limit}, offset={query_request.offset}")
+        
+        # Execute the paginated query
+        paginated_query = f"{query} LIMIT {query_request.limit} OFFSET {query_request.offset}"
+        logger.info(f"Executing paginated query: {paginated_query}")
+        result = db.execute(text(paginated_query))
         
         # Convert rows to dictionaries
         data = []
@@ -418,13 +426,14 @@ async def execute_query(notebook_id: int, query_request: QueryRequest, db: Sessi
         columns = result.keys()
         logger.info(f"Query columns: {columns}")
         
-        # Get total count (this is an approximation for custom queries)
-        total = len(data)
+        # For the total count, just use the number of rows in the response
+        # This is a simplification that works for most queries
+        total_count = len(data)
         
         return schemas.DataResponse(
             data=data,
             columns=columns,
-            total=total,
+            total=total_count,
             table_name=table_name
         )
     except Exception as e:

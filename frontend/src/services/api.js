@@ -97,10 +97,11 @@ export const notebookApi = {
     }
   },
 
-  executeQuery: async (id, query) => {
+  executeQuery: async (id, query, options = {}) => {
     console.log(`Executing query for notebook ${id}: ${query}`);
 
     try {
+      const { limit = 1000, offset = 0 } = options;
       const response = await fetch(
         `${API_BASE_URL}/notebooks/${id}/execute-query`,
         {
@@ -108,7 +109,7 @@ export const notebookApi = {
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ query }),
+          body: JSON.stringify({ query, limit, offset }),
         }
       );
 
@@ -119,9 +120,12 @@ export const notebookApi = {
           statusText: response.statusText,
           errorData,
         });
-        throw new Error(
-          `Failed to execute query: ${response.status} ${response.statusText}`
-        );
+
+        // Extract the detailed error message from the response
+        const errorMessage =
+          errorData.detail ||
+          `Failed to execute query: ${response.status} ${response.statusText}`;
+        throw new Error(errorMessage);
       }
 
       const data = await response.json();
