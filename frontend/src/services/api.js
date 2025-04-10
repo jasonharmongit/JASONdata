@@ -62,12 +62,74 @@ export const notebookApi = {
 
   getData: async (id, options = {}) => {
     const { limit = 1000, offset = 0 } = options;
-    const response = await fetch(
-      `${API_BASE_URL}/notebooks/${id}/data?limit=${limit}&offset=${offset}`
+    console.log(
+      `Fetching data for notebook ${id} with limit=${limit}, offset=${offset}`
     );
-    if (!response.ok) {
-      throw new Error("Failed to fetch notebook data");
+
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/notebooks/${id}/data?limit=${limit}&offset=${offset}`
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error("API error response:", {
+          status: response.status,
+          statusText: response.statusText,
+          errorData,
+        });
+        throw new Error(
+          `Failed to fetch notebook data: ${response.status} ${response.statusText}`
+        );
+      }
+
+      const data = await response.json();
+      console.log("API response data:", data);
+
+      if (!data.table_name) {
+        console.warn("Table name is missing from API response:", data);
+      }
+
+      return data;
+    } catch (error) {
+      console.error("Error in getData:", error);
+      throw error;
     }
-    return response.json();
+  },
+
+  executeQuery: async (id, query) => {
+    console.log(`Executing query for notebook ${id}: ${query}`);
+
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/notebooks/${id}/execute-query`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ query }),
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error("API error response:", {
+          status: response.status,
+          statusText: response.statusText,
+          errorData,
+        });
+        throw new Error(
+          `Failed to execute query: ${response.status} ${response.statusText}`
+        );
+      }
+
+      const data = await response.json();
+      console.log("Query execution response:", data);
+      return data;
+    } catch (error) {
+      console.error("Error in executeQuery:", error);
+      throw error;
+    }
   },
 };

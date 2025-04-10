@@ -52,9 +52,10 @@ class Analysis(AnalysisBase):
         from_attributes = True
 
 class DataResponse(BaseModel):
-    data: List[Dict[str, Any]]
+    data: List[Dict]
     columns: List[str]
     total: int
+    table_name: str
 
     class Config:
         from_attributes = True 

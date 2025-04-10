@@ -9,6 +9,7 @@ import logging
 import re
 from . import models, schemas
 from .database import engine, get_db
+from pydantic import BaseModel
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -170,51 +171,92 @@ def get_notebook(notebook_id: int, db: Session = Depends(get_db)):
     return notebook
 
 @app.get("/notebooks/{notebook_id}/data", response_model=schemas.DataResponse)
-def get_notebook_data(
+async def get_notebook_data(
     notebook_id: int,
-    limit: int = Query(default=100, ge=1, le=1000),
-    offset: int = Query(default=0, ge=0),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    limit: int = 100,
+    offset: int = 0,
+    sort_by: Optional[str] = None,
+    sort_order: Optional[str] = None,
+    filter_by: Optional[str] = None,
+    filter_value: Optional[str] = None
 ):
-    # Get the notebook
+    logger.info(f"Fetching data for notebook_id: {notebook_id}")
+    
     notebook = db.query(models.Notebook).filter(models.Notebook.id == notebook_id).first()
-    if notebook is None:
+    if not notebook:
+        logger.error(f"Notebook not found with ID: {notebook_id}")
         raise HTTPException(status_code=404, detail="Notebook not found")
     
-    if not notebook.table_name:
-        raise HTTPException(status_code=404, detail="No data table found for this notebook")
+    logger.info(f"Found notebook: {notebook.title}, table_name: {notebook.table_name}")
+    
+    table_name = notebook.table_name
+    if not table_name:
+        logger.error(f"Table name is missing for notebook ID: {notebook_id}")
+        raise HTTPException(status_code=404, detail="Table not found for this notebook")
+    
+    query = f"SELECT * FROM {table_name}"
+    
+    if filter_by and filter_value:
+        query += f" WHERE {filter_by}::text ILIKE '%{filter_value}%'"
+    
+    if sort_by:
+        query += f" ORDER BY {sort_by} {sort_order or 'ASC'}"
+    
+    query += f" LIMIT {limit} OFFSET {offset}"
     
     try:
-        # Query the data table
-        with engine.connect() as conn:
-            # Get the total count
-            count_sql = f"SELECT COUNT(*) FROM {notebook.table_name}"
-            total = conn.execute(text(count_sql)).scalar()
-            
-            # Get the data
-            data_sql = f"""
-            SELECT * FROM {notebook.table_name}
-            LIMIT {limit} OFFSET {offset}
-            """
-            result = conn.execute(text(data_sql))
-            
-            # Get column names
-            columns = result.keys()
-            
-            # Convert to list of dictionaries
-            data = [dict(zip(columns, row)) for row in result]
+        logger.info(f"Executing query: {query}")
+        result = db.execute(text(query))
         
-        return {
-            "data": data,
-            "columns": columns,
-            "total": total
-        }
+        # Fix the row conversion issue
+        data = []
+        for row in result:
+            # Convert row to dictionary using a more robust approach
+            row_dict = {}
+            for i, column in enumerate(result.keys()):
+                row_dict[column] = row[i]
+            data.append(row_dict)
+            
+        logger.info(f"Query returned {len(data)} rows")
         
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error reading data: {str(e)}"
+        # Get column names
+        columns_query = f"""
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name = '{table_name}'
+            ORDER BY ordinal_position
+        """
+        logger.info(f"Fetching columns with query: {columns_query}")
+        columns_result = db.execute(text(columns_query))
+        columns = [row[0] for row in columns_result]
+        logger.info(f"Found columns: {columns}")
+        
+        # Get total count
+        count_query = f"SELECT COUNT(*) FROM {table_name}"
+        if filter_by and filter_value:
+            count_query += f" WHERE {filter_by}::text ILIKE '%{filter_value}%'"
+        logger.info(f"Counting rows with query: {count_query}")
+        total = db.execute(text(count_query)).scalar()
+        logger.info(f"Total row count: {total}")
+        
+        response = schemas.DataResponse(
+            data=data,
+            columns=columns,
+            total=total,
+            table_name=table_name
         )
+        logger.info(f"Returning response with table_name: {response.table_name}")
+        
+        # Verify the response has the table_name field
+        response_dict = response.model_dump()
+        logger.info(f"Response dictionary keys: {list(response_dict.keys())}")
+        logger.info(f"Response table_name value: {response_dict.get('table_name')}")
+        
+        return response
+    except Exception as e:
+        logger.error(f"Error fetching data: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.put("/notebooks/{notebook_id}", response_model=schemas.Notebook)
 def update_notebook(notebook_id: int, notebook: schemas.NotebookCreate, db: Session = Depends(get_db)):
@@ -326,4 +368,65 @@ def create_dataset(notebook_id: int, dataset: schemas.DatasetCreate, db: Session
         
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Error creating dataset: {str(e)}") 
+        raise HTTPException(status_code=500, detail=f"Error creating dataset: {str(e)}")
+
+class QueryRequest(BaseModel):
+    query: str
+
+@app.post("/notebooks/{notebook_id}/execute-query", response_model=schemas.DataResponse)
+async def execute_query(notebook_id: int, query_request: QueryRequest, db: Session = Depends(get_db)):
+    """Execute a custom SQL query on the notebook's data table"""
+    logger.info(f"Executing query for notebook {notebook_id}: {query_request.query}")
+    
+    # Get the notebook
+    notebook = db.query(models.Notebook).filter(models.Notebook.id == notebook_id).first()
+    if not notebook:
+        logger.error(f"Notebook not found with ID: {notebook_id}")
+        raise HTTPException(status_code=404, detail="Notebook not found")
+    
+    table_name = notebook.table_name
+    if not table_name:
+        logger.error(f"Table name is missing for notebook ID: {notebook_id}")
+        raise HTTPException(status_code=404, detail="Table not found for this notebook")
+    
+    # Validate the query to ensure it only operates on the correct table
+    query = query_request.query.strip()
+    if not query.lower().startswith("select"):
+        raise HTTPException(status_code=400, detail="Only SELECT queries are allowed")
+    
+    # Check if the query contains the correct table name
+    if table_name.lower() not in query.lower():
+        logger.warning(f"Query may be targeting a different table than {table_name}: {query}")
+        # We'll still execute it, but log a warning
+    
+    try:
+        # Execute the query
+        logger.info(f"Executing query: {query}")
+        result = db.execute(text(query))
+        
+        # Convert rows to dictionaries
+        data = []
+        for row in result:
+            row_dict = {}
+            for i, column in enumerate(result.keys()):
+                row_dict[column] = row[i]
+            data.append(row_dict)
+        
+        logger.info(f"Query returned {len(data)} rows")
+        
+        # Get column names from the result
+        columns = result.keys()
+        logger.info(f"Query columns: {columns}")
+        
+        # Get total count (this is an approximation for custom queries)
+        total = len(data)
+        
+        return schemas.DataResponse(
+            data=data,
+            columns=columns,
+            total=total,
+            table_name=table_name
+        )
+    except Exception as e:
+        logger.error(f"Error executing query: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error executing query: {str(e)}") 
